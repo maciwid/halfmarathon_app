@@ -182,9 +182,6 @@ def parse_data(response):
 if "description" not in st.session_state:
     st.session_state["description"] = None
 
-if "is_description_valid" not in st.session_state:
-     st.session_state["is_description_valid"] = None
-
 if "response_json" not in st.session_state:
     st.session_state["response_json"] = None
 
@@ -209,6 +206,8 @@ if not st.session_state.get("openai_api_key"):
 st.title("A jaki czas Ty możesz mieć na półmaratonie?")
 
 with st.form("user_form"):
+    st.write("Dzięki modelowi wytrenowanemu na danych z półmaratonu Wrocławskiego jesteśmy w stanie obliczyć szacowany czas na bazie Twoich informacji, takich jak wiek, płeć, czy wyniki w biegu. ")
+    st.write(" Nie przejmuj się jeśli nie wiesz ile biegniesz 20 km. Program policzy tempo dla dłuższych dystansów aplikując formułę Riegla uwzględniającą zmęczenie. Możesz podać kilka rekordów dla dokładniejszego wyniku")
     user_text = st.text_area("Opowiedz nam o sobie. Ile masz lat? Jakiej jesteś płci? Jakie czasy osiągasz w biegu na długie dystanse (1km+)?")
     submitted = st.form_submit_button("Sprawdź")
 
@@ -217,14 +216,11 @@ if submitted:
     st.session_state["response_json"] = safe_retrieve_structure(st.session_state["description"])
     missing_keys = validate_json(st.session_state["response_json"], ["sex", "age", "time_per_distance"])
     if missing_keys:
-        st.session_state["is_description_valid"] = False
         st.session_state["response_json"] = None
         st.error(f"Dane nie są wystarczające do analizy.") 
         st.info(list_missing_items(missing_keys))
     else:
-        st.session_state["is_description_valid"] = True
         st.success("Dane zostały wprowadzone poprawnie")
-
 
         with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
 
