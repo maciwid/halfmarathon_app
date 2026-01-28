@@ -5,9 +5,8 @@ import numpy as np
 from dotenv import dotenv_values, load_dotenv
 from openai import OpenAI
 import instructor
+from typing import Optional, List
 from pydantic import BaseModel
-import boto3
-import os
 from datetime import date
 from pycaret.regression import load_model, predict_model  # type: ignore
 
@@ -19,52 +18,61 @@ MARATHON_LENGTH = 21
 def get_openai_client():
     return OpenAI(api_key=st.session_state["openai_api_key"])
 
-class ClassificationCategory(str, enum.Enum):
-    VALID = "valid"
-    NOT_VALID= "not_valid"
 
-def check_validity(description):
-    class ClassificationResult(BaseModel):
-        category: ClassificationCategory
-    instructor_openai_client = instructor.from_openai(get_openai_client())
-    res = instructor_openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        response_model=ClassificationResult,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Jesteś klasyfikatorem ścisłym.\n"
-                    "Zwróć VALID tylko wtedy, gdy WSZYSTKIE poniższe elementy są jawnie obecne:\n"
-                    "- płeć (mężczyzna/kobieta)\n"
-                    "- wiek w latach\n"
-                    "- czas trwania (np. mm:ss, GG:MM:SS lub 'X km w Y minutach')\n\n"
-                    "Jeśli brakuje KTÓREGOKOLWIEK z tych elementów, zwróć NOT_VALID"
-                ),
-            },
-            {
-                "role": "user",
-                "content": description,
-            },
-        ],
-    )
-    return res.category
+def validate_json(json_data: dict, required_keys: list) -> list:
+    """
+    Sprawdza, które wymagane klucze są brakujące lub mają wartość None/pustą.
+    
+    Args:
+        json_data (dict): JSON / dict do sprawdzenia.
+        required_keys (list): lista wymaganych kluczy (str).
+        
+    Returns:
+        list: lista brakujących kluczy. Pusta lista = wszystkie ok.
+    """
+    missing = []
+    for key in required_keys:
+        if key not in json_data or json_data[key] is None or (isinstance(json_data[key], (str, list, dict)) and not json_data[key]):
+            missing.append(key)
+    return missing
+
+def list_missing_items(missing_keys: list) -> str:
+    # mapowanie kluczy na polskie nazwy
+    key_map = {
+        "sex": "Płeć",
+        "age": "Wiek",
+        "time_per_distance": "Czas na dystans"
+    }
+    # zamiana na polskie nazwy (ignoruje nieznane klucze)
+    polish_keys = [key_map[k] for k in missing_keys if k in key_map]
+    
+    return "Brakuje danych: " + ", ".join(polish_keys)
 
 def retrieve_structure(text):
     class TimePerDistance(BaseModel):
-        time_in_seconds: int      # np. "12:30"
-        distance_in_km: int 
+        time_in_seconds: Optional[int] = None
+        distance_in_km: Optional[int] = None
+
     class Features(BaseModel):
-        sex: str
-        age: int
-        runs_professionally: bool
-        time_per_distance: list[TimePerDistance]
+        sex: Optional[str] = None
+        age: Optional[int] = None
+        runs_professionally: Optional[bool] = None
+        time_per_distance: Optional[List[TimePerDistance]] = None
     instructor_openai_client = instructor.from_openai(get_openai_client())
     res = instructor_openai_client.chat.completions.create(
         model="gpt-4o",
         temperature=0,
         response_model=Features,
         messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Wyciągasz dane z tekstu. Zwróć JSON w formacie: "
+                    "{sex, age, runs_professionally, time_per_distance: [{time_in_seconds, distance_in_km}]}. "
+                    "Jeśli jakaś wartość jest nieobecna lub niejasna, użyj null. "
+                    "Czas przelicz na sekundy."
+                ),
+            },
             {
                 "role": "user",
                 "content": text,
@@ -73,6 +81,20 @@ def retrieve_structure(text):
     )
 
     return res.model_dump()
+
+def safe_retrieve_structure(text):
+    try:
+        res = retrieve_structure(text)
+    except Exception as e:
+        print("Błąd parsowania:", e)
+        res = {
+            "sex": None,
+            "age": None,
+            "runs_professionally": None,
+            "time_per_distance": []
+        }
+    return res
+
 
 @st.cache_data 
 def predict_time(inferred_df):
@@ -106,9 +128,9 @@ def estimate_tempo(
 
 def parse_data(response):
     tempos = []
-    if response["sex"] == "male":
+    if response["sex"] in ["male", "man", "mężczyzna"]:
         sex = "M"
-    elif response["sex"] == "female":
+    elif response["sex"] in ["female", "kobieta"]:
         sex = "K"
     for item in response["time_per_distance"]:
         tempos.append(estimate_tempo(MARATHON_LENGTH, item["time_in_seconds"], item["distance_in_km"], response["runs_professionally"]))
@@ -189,29 +211,22 @@ with st.form("user_form"):
 
 if submitted:
     st.session_state["description"] = user_text
+    st.session_state["response_json"] = safe_retrieve_structure(st.session_state["description"])
+    missing_keys = validate_json(st.session_state["response_json"], ["sex", "age", "time_per_distance"])
+    if missing_keys:
+        st.session_state["is_description_valid"] = False
+        st.session_state["response_json"] = None
+        st.error(f"Dane nie są wystarczające do analizy.") 
+        st.info(list_missing_items(missing_keys))
+    else:
+        st.session_state["is_description_valid"] = True
+        st.success("Dane zostały wprowadzone poprawnie")
 
 
-# if st.session_state["description"]: 
-#         if st.button("Wyślij zapytanie"):
-    st.session_state["is_description_valid"] = None
-    try:
-        if check_validity(st.session_state["description"]) == "valid":
-            st.session_state["is_description_valid"] = True
-            st.success("Dane zostały wprowadzone poprawnie")
-        else:
-            st.session_state["is_description_valid"] = False
-            st.session_state["response_json"] = None
-            st.error("Dane nie są wystarczające do analizy. Najlepiej aby podany opis zawierał informację o wieku, płci i czasie na dowolny dłuszy dystans") 
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        st.stop()
-    if st.session_state["is_description_valid"]:
-        st.session_state["response_json"] = retrieve_structure(st.session_state["description"])
+        with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
 
-with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
-
-    if st.session_state["response_json"]:
-        inferred_df = parse_data(st.session_state["response_json"])
-        predicted_time = predict_time(inferred_df)
-        st.metric("Świetnie! Z naszych obliczeń wynika, że Twój czas na półmaratonie może wynieść około:", seconds_to_time(predicted_time["prediction_label"]))
+            if st.session_state["response_json"]:
+                inferred_df = parse_data(st.session_state["response_json"])
+                predicted_time = predict_time(inferred_df)
+                st.metric("Świetnie! Z naszych obliczeń wynika, że Twój czas na półmaratonie może wynieść około:", seconds_to_time(predicted_time["prediction_label"]))
 
