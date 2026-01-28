@@ -1,8 +1,8 @@
+import os
 import streamlit as st
-import enum
 import pandas as pd
 import numpy as np
-from dotenv import dotenv_values, load_dotenv
+from dotenv import load_dotenv
 import instructor
 from typing import Optional, List
 from pydantic import BaseModel
@@ -12,7 +12,6 @@ from langfuse.decorators import observe
 from langfuse.openai import OpenAI
 
 
-env = dotenv_values(".env")
 load_dotenv()
 
 MODEL_NAME = 'marathon_model'
@@ -192,8 +191,8 @@ if "response_json" not in st.session_state:
 
 # OpenAI API key protection
 if not st.session_state.get("openai_api_key"):
-    if "OPENAI_API_KEY" in env:
-        st.session_state["openai_api_key"] = env["OPENAI_API_KEY"]
+    if "OPENAI_API_KEY" in os.environ:
+        st.session_state["openai_api_key"] = os.environ["OPENAI_API_KEY"]
 
     else:
         st.info("Dodaj swój klucz Open API, aby korzystać z aplikacji")
