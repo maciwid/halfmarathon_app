@@ -207,23 +207,23 @@ st.title("A jaki czas Ty możesz mieć na półmaratonie?")
 
 with st.form("user_form"):
     st.write("Dzięki modelowi wytrenowanemu na danych z półmaratonu Wrocławskiego jesteśmy w stanie obliczyć szacowany czas na bazie Twoich informacji, takich jak wiek, płeć, czy wyniki w biegu. ")
-    st.write(" Nie przejmuj się jeśli nie wiesz ile biegniesz 20 km. Program policzy tempo dla dłuższych dystansów aplikując formułę Riegla uwzględniającą zmęczenie. Możesz podać kilka rekordów dla dokładniejszego wyniku")
+    st.write("Nie przejmuj się jeśli nie wiesz ile biegniesz 20 km. Program policzy tempo dla dłuższych dystansów na bazie krótszych, aplikując formułę Riegla uwzględniającą zmęczenie. Możesz podać kilka rekordów dla dokładniejszego wyniku")
     user_text = st.text_area("Opowiedz nam o sobie. Ile masz lat? Jakiej jesteś płci? Jakie czasy osiągasz w biegu na długie dystanse (1km+)?")
     submitted = st.form_submit_button("Sprawdź")
 
 if submitted:
     st.session_state["description"] = user_text
-    st.session_state["response_json"] = safe_retrieve_structure(st.session_state["description"])
-    missing_keys = validate_json(st.session_state["response_json"], ["sex", "age", "time_per_distance"])
-    if missing_keys:
-        st.session_state["response_json"] = None
-        st.error(f"Dane nie są wystarczające do analizy.") 
-        st.info(list_missing_items(missing_keys))
-    else:
-        st.success("Dane zostały wprowadzone poprawnie")
-
-        with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
-
+    with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
+        st.session_state["response_json"] = safe_retrieve_structure(st.session_state["description"])
+        missing_keys = validate_json(st.session_state["response_json"], ["sex", "age", "time_per_distance"])
+        if missing_keys:
+            st.session_state["response_json"] = None
+            st.error(f"Dane nie są wystarczające do analizy.") 
+            st.info(list_missing_items(missing_keys))
+        else:
+            st.success("Dane zostały wprowadzone poprawnie")
+            if st.session_state["response_json"]["age"] > 99:
+                st.info(f"Masz {st.session_state['response_json']['age']} lat? Cóż... Gratulujemy zdrowia!")
             if st.session_state["response_json"]:
                 inferred_df = parse_data(st.session_state["response_json"])
                 predicted_time = predict_time(inferred_df)
