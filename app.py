@@ -34,12 +34,12 @@ def check_validity(description):
             {
                 "role": "system",
                 "content": (
-                    "You are a strict classifier.\n"
-                    "Return VALID only if ALL of the following are explicitly present:\n"
-                    "- sex (male/female)\n"
-                    "- age in years\n"
-                    "- running time (e.g. mm:ss, HH:MM:SS, or 'X km in Y minutes')\n\n"
-                    "If ANY of these is missing, return NOT_VALID."
+                    "Jesteś klasyfikatorem ścisłym.\n"
+                    "Zwróć VALID tylko wtedy, gdy WSZYSTKIE poniższe elementy są jawnie obecne:\n"
+                    "- płeć (mężczyzna/kobieta)\n"
+                    "- wiek w latach\n"
+                    "- czas trwania (np. mm:ss, GG:MM:SS lub 'X km w Y minutach')\n\n"
+                    "Jeśli brakuje KTÓREGOKOLWIEK z tych elementów, zwróć NOT_VALID"
                 ),
             },
             {
@@ -113,7 +113,7 @@ def parse_data(response):
     for item in response["time_per_distance"]:
         tempos.append(estimate_tempo(MARATHON_LENGTH, item["time_in_seconds"], item["distance_in_km"], response["runs_professionally"]))
     if tempos:
-        tempo = sum(tempos) / len(tempos)
+        tempo = sum(tempos) / len(tempos) # calculate mean tempo for all given times
     else:
         tempo = np.nan
     rocznik = date.today().year - response["age"]
@@ -183,32 +183,35 @@ if not st.session_state.get("openai_api_key"):
 
 st.title("A jaki czas Ty możesz mieć na półmaratonie?")
 
-st.session_state["description"] = st.text_area(
-            "Opowiedz nam o sobie. Podziel się osiągnięciami w biegu na długie dystanse (1km+)", 
-            height=300, 
-        )
+with st.form("user_form"):
+    user_text = st.text_area("Opowiedz nam o sobie. Ile masz lat? Jakiej jesteś płci? Jakie czasy osiągasz w biegu na długie dystanse (1km+)?")
+    submitted = st.form_submit_button("Sprawdź")
 
-if st.session_state["description"]: 
-        if st.button("Wyślij zapytanie"):
-            st.session_state["is_description_valid"] = None
-            try:
-                if check_validity(st.session_state["description"]) == "valid":
-                    st.session_state["is_description_valid"] = True
-                    st.write("Dobre dane")
-                else:
-                    st.session_state["is_description_valid"] = False
-                    st.session_state["response_json"] = None
-                    st.write("Dane nie są wystarczające do analizy. Najlepiej aby podany opis zawierał informację o wieku, płci i czasie na dowolny dłuszy dystans") 
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
-                st.stop()
-            if st.session_state["is_description_valid"]:
-                st.session_state["response_json"] = retrieve_structure(st.session_state["description"])
-                st.write(st.session_state["response_json"])
+if submitted:
+    st.session_state["description"] = user_text
 
-if st.session_state["response_json"]:
-    inferred_df = parse_data(st.session_state["response_json"])
-    predicted_time = predict_time(inferred_df)
-    st.write(f"Świetnie! Z naszych obliczeń wynika, ze przebiegniesz pół maraton w czasie:")
-    st.caption(seconds_to_time(predicted_time["prediction_label"]))
-    st.dataframe(predicted_time)
+
+# if st.session_state["description"]: 
+#         if st.button("Wyślij zapytanie"):
+    st.session_state["is_description_valid"] = None
+    try:
+        if check_validity(st.session_state["description"]) == "valid":
+            st.session_state["is_description_valid"] = True
+            st.success("Dane zostały wprowadzone poprawnie")
+        else:
+            st.session_state["is_description_valid"] = False
+            st.session_state["response_json"] = None
+            st.error("Dane nie są wystarczające do analizy. Najlepiej aby podany opis zawierał informację o wieku, płci i czasie na dowolny dłuszy dystans") 
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        st.stop()
+    if st.session_state["is_description_valid"]:
+        st.session_state["response_json"] = retrieve_structure(st.session_state["description"])
+
+with st.spinner("Poczekaj, aż nasz model przeliczy Twój czas...", show_time=True):
+
+    if st.session_state["response_json"]:
+        inferred_df = parse_data(st.session_state["response_json"])
+        predicted_time = predict_time(inferred_df)
+        st.metric("Świetnie! Z naszych obliczeń wynika, że Twój czas na półmaratonie może wynieść około:", seconds_to_time(predicted_time["prediction_label"]))
+
