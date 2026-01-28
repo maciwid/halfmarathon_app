@@ -29,6 +29,26 @@ def check_validity(description):
         ],
     )
     return res.category
+
+def retrieve_structure(text):
+    class Features(BaseModel):
+        sex: str
+        age: int
+        time_per_distance: list[str, str]
+    instructor_openai_client = instructor.from_openai(get_openai_client())
+    res = instructor_openai_client.chat.completions.create(
+        model="gpt-4o",
+        temperature=0,
+        response_model=Features,
+        messages=[
+            {
+                "role": "user",
+                "content": text,
+            },
+        ],
+    )
+
+    return res.model_dump()
      
 
 if "description" not in st.session_state:
@@ -76,4 +96,6 @@ if st.session_state["description"]:
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
                 st.stop()
+            if st.session_state["is_description_valid"]:
+                st.write(retrieve_structure(st.session_state["description"]))
             
