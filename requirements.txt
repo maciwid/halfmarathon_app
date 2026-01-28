@@ -1,4 +1,9 @@
 openai==1.47.0
-langfuse
 streamlit
+pandas
+numpy
 python-dotenv
+instructor
+pydantic
+pycaret
+langfuse
