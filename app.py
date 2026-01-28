@@ -32,8 +32,19 @@ def check_validity(description):
         response_model=ClassificationResult,
         messages=[
             {
+                "role": "system",
+                "content": (
+                    "You are a strict classifier.\n"
+                    "Return VALID only if ALL of the following are explicitly present:\n"
+                    "- sex (male/female)\n"
+                    "- age in years\n"
+                    "- running time (e.g. mm:ss, HH:MM:SS, or 'X km in Y minutes')\n\n"
+                    "If ANY of these is missing, return NOT_VALID."
+                ),
+            },
+            {
                 "role": "user",
-                "content": f"Sprawdź czy tekst zawiera KAŻDĄ z tych informacji: płeć && wiek && czas w bieganiu: {description}",
+                "content": description,
             },
         ],
     )
