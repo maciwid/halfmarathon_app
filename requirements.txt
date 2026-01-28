@@ -1,9 +1,9 @@
 openai==1.47.0
-streamlit
+streamlit==1.43.2
 pandas
 numpy
-python-dotenv
-instructor
-pydantic
-pycaret
-langfuse
+python-dotenv==0.21.0
+instructor==1.3.7
+pydantic==2.5.3
+pycaret==3.3.2
+langfuse==2.51.4
