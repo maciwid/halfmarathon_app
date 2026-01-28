@@ -63,6 +63,19 @@ def retrieve_structure(text):
 
     return res.model_dump()
 
+@st.cache_data 
+def predict_time(inferred_df):
+    model = load_model(MODEL_NAME)
+    predicted_time = predict_model(model, data = inferred_df)
+    return predicted_time
+
+def seconds_to_time(seconds: float) -> str:
+    seconds = int(round(seconds))
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
 def estimate_tempo(
         estimated_distance, 
         known_time,
@@ -73,16 +86,12 @@ def estimate_tempo(
     This function estimates time for a given distance using Riegel formula
     """
     if runs_professionally:
-        exhaustion_coeff = 1.04,
+        exhaustion_coeff = 1.04
     else:
         exhaustion_coeff = 1.06
     estimated_time = known_time * ((estimated_distance/known_distance)**exhaustion_coeff)
     tempo = (estimated_time/estimated_distance)/60
     return tempo
-
-@st.cache_data 
-def load_model():
-    return load_model(MODEL_NAME)
 
 def parse_data(response):
     tempos = []
@@ -92,7 +101,10 @@ def parse_data(response):
         sex = "K"
     for item in response["time_per_distance"]:
         tempos.append(estimate_tempo(MARATHON_LENGTH, item["time_in_seconds"], item["distance_in_km"], response["runs_professionally"]))
-    tempo = sum(tempos) / len(tempos)
+    if tempos:
+        tempo = sum(tempos) / len(tempos)
+    else:
+        tempo = np.nan
     rocznik = date.today().year - response["age"]
     age_category = (response["age"] // 10) * 10
     sex_age_category = f"{sex}{age_category}"
@@ -123,7 +135,6 @@ def parse_data(response):
             '20 km Miejsce Open': np.nan,
             '20 km Tempo': np.nan,
             'Tempo Stabilność': np.nan,
-            'Czas': np.nan,
             'Tempo': tempo
         }
     ])
@@ -186,7 +197,7 @@ if st.session_state["description"]:
 
 if st.session_state["response_json"]:
     inferred_df = parse_data(st.session_state["response_json"])
-    # model = load_model()
-    # predicted_time = predict_model(model, inferred_df)
-    # st.write(predicted_time)
-    st.dataframe(inferred_df)
+    predicted_time = predict_time(inferred_df)
+    st.write(f"Świetnie! Z naszych obliczeń wynika, ze przebiegniesz pół maraton w czasie:")
+    st.caption(seconds_to_time(predicted_time["prediction_label"]))
+    st.dataframe(predicted_time)
