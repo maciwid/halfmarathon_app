@@ -3,14 +3,17 @@ import enum
 import pandas as pd
 import numpy as np
 from dotenv import dotenv_values, load_dotenv
-from openai import OpenAI
 import instructor
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import date
 from pycaret.regression import load_model, predict_model  # type: ignore
+from langfuse.decorators import observe
+from langfuse.openai import OpenAI
+
 
 env = dotenv_values(".env")
+load_dotenv()
 
 MODEL_NAME = 'marathon_model'
 MARATHON_LENGTH = 21
@@ -48,6 +51,7 @@ def list_missing_items(missing_keys: list) -> str:
     
     return "Brakuje danych: " + ", ".join(polish_keys)
 
+@observe()
 def retrieve_structure(text):
     class TimePerDistance(BaseModel):
         time_in_seconds: Optional[int] = None
