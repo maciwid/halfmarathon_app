@@ -50,17 +50,18 @@ def list_missing_items(missing_keys: list) -> str:
     
     return "Brakuje danych: " + ", ".join(polish_keys)
 
-@observe()
-def retrieve_structure(text):
-    class TimePerDistance(BaseModel):
-        time_in_seconds: Optional[int] = None
-        distance_in_km: Optional[int] = None
+class TimePerDistance(BaseModel):
+    time_in_seconds: Optional[int] = None
+    distance_in_km: Optional[int] = None
 
-    class Features(BaseModel):
-        sex: Optional[str] = None
-        age: Optional[int] = None
-        runs_professionally: Optional[bool] = None
-        time_per_distance: Optional[List[TimePerDistance]] = None
+class Features(BaseModel):
+    sex: Optional[str] = None
+    age: Optional[int] = None
+    runs_professionally: Optional[bool] = None
+    time_per_distance: Optional[List[TimePerDistance]] = None
+
+@observe()
+def retrieve_structure(text: str) -> dict:
     instructor_openai_client = instructor.from_openai(get_openai_client())
     res = instructor_openai_client.chat.completions.create(
         model="gpt-4o",
@@ -85,7 +86,7 @@ def retrieve_structure(text):
 
     return res.model_dump()
 
-def safe_retrieve_structure(text):
+def safe_retrieve_structure(text: str) -> dict:
     try:
         res = retrieve_structure(text)
     except Exception as e:
@@ -130,6 +131,9 @@ def estimate_tempo(
     return tempo
 
 def parse_data(response):
+    '''
+    This function parses json returned from LLM to df compatible with trained model
+    '''
     tempos = []
     if response["sex"] in ["male", "man", "mężczyzna"]:
         sex = "M"
